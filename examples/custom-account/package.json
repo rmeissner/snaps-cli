@@ -15,6 +15,7 @@
     },
     "initialPermissions": {
       "confirm": {},
+      "eth_accounts": {},
       "prompt": {},
       "wallet_manageIdentities": {}
     }

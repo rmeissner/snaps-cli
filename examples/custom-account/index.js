@@ -17,16 +17,72 @@ wallet.registerRpcMessageHandler(async (_origin, req) => {
   return true
 })
 
+async function sign(tx) {
+  await confirm(`Transaction to sign: \n${JSON.stringify(tx)}`)
+  let typedData = {
+    types: {
+        EIP712Domain: [
+            { type: "address", name: "verifyingContract" }
+        ],
+        // "SafeTx(address to,uint256 value,bytes data,uint8 operation,uint256 safeTxGas,uint256 baseGas,uint256 gasPrice,address gasToken,address refundReceiver,uint256 nonce)"
+        SafeTx: [
+            { type: "address", name: "to" },
+            { type: "uint256", name: "value" },
+            { type: "bytes", name: "data" },
+            { type: "uint8", name: "operation" },
+            { type: "uint256", name: "safeTxGas" },
+            { type: "uint256", name: "baseGas" },
+            { type: "uint256", name: "gasPrice" },
+            { type: "address", name: "gasToken" },
+            { type: "address", name: "refundReceiver" },
+            { type: "uint256", name: "nonce" },
+        ]
+    },
+    domain: {
+        verifyingContract: tx.from
+    },
+    primaryType: "SafeTx",
+    message: {
+        to: tx.to,
+        value: tx.value,
+        data: tx.data,
+        operation: 0,
+        safeTxGas: 0,
+        baseGas: 0,
+        gasPrice: 0,
+        gasToken: 0,
+        refundReceiver: 0,
+        nonce: 0
+    }
+  }
+  await confirm(`Data to sign: \n${JSON.stringify(typedData)}`)
+  const accounts = await wallet.send({
+    method: 'eth_accounts',
+    params: [],
+  })
+  await confirm(`Accounts: ${JSON.stringify(accounts)}`)
+  const signature = await wallet.send({
+    method: 'eth_signTypedData_v4',
+    params: [ accounts[0], typedData],
+  })
+  await confirm(`Signature ${JSON.stringify(signature)}`)
+  return signature
+}
+
 wallet.registerAccountMessageHandler(async (origin, req) => {
+  console.log("Handle method", req.method)
   switch (req.method) {
-    case 'eth_sign':
     case 'eth_signTransaction':
-    case 'personal_sign':
-    case 'wallet_signTypedData':
-    case 'wallet_signTypedData_v3':
-    case 'wallet_signTypedData_v4':
-      const result = await prompt(`The site from ${origin} requests you ${req.method} this data with your offline strategy:\n${JSON.stringify(req)}`)
-      return result
+      const approved = await confirm(`Transaction will be submitted for confirmation to Safe for teams`)
+      if (!approved) {
+        throw rpcErrors.userRejectedRequest()
+      }
+      try {
+        return await sign(req.params[0])
+      } catch (e) {
+        await confirm(`Error: \n${JSON.stringify(e)}`)
+        throw e
+      }
     default:
       throw rpcErrors.methodNotFound(req)
   }
